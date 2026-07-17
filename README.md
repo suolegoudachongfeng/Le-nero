@@ -1,47 +1,22 @@
 # Le-nero
 
-This repository is based on LeRobot and adds dual-arm robot teleoperation, data collection, policy training, and a round-based DAgger loop. This README only covers the repository structure, configuration entry points, and runtime call flow needed for daily use.
+This repository is based on LeRobot and provides the dataset and policy stack used by the separately maintained `dual_arm_teleop` hardware project. The two repositories are installed into one Python environment but remain independent sibling repositories.
 
 ## Repository Setup and Environment
 
-For a first-time clone, fetch submodules together with the main repository:
+Clone Le-nero and the dual-arm hardware project as sibling repositories:
 
 ```bash
-git clone --recurse-submodules <Le-nero repository URL> Le-nero
-cd Le-nero
+git clone <Le-nero repository URL> Le-nero
+git clone <dual_arm_teleop repository URL> dual_arm_teleop
 ```
 
-If the repository has already been cloned but submodule directories are empty or incomplete, run this from the repository root:
-
-```bash
-git submodule sync --recursive
-git submodule update --init --recursive
-```
-
-To update the main repository and submodules during daily development:
+Update each repository independently during daily development:
 
 ```bash
 cd Le-nero
 git pull --ff-only
-git submodule sync --recursive
-git submodule update --init --recursive
-git submodule update --remote --merge --recursive
-```
-
-To switch the main repository branch:
-
-```bash
-git fetch origin
-git switch <branch_name>
-git submodule update --init --recursive
-```
-
-To switch or update the dual-arm teleoperation submodule:
-
-```bash
-cd Le-nero/dual_arm_data_collection/lerobot_dual_arm_teleop
-git fetch origin
-git switch main
+cd ../dual_arm_teleop
 git pull --ff-only
 ```
 
@@ -55,14 +30,14 @@ python -m pip install --upgrade pip
 cd Le-nero
 pip install -e .
 
-cd dual_arm_data_collection/lerobot_dual_arm_teleop
+cd ../dual_arm_teleop
 pip install -e .
 ```
 
-Oculus Reader is not managed by the current `.gitmodules`, so it must be cloned separately into the required location:
+Oculus Reader must be cloned inside the standalone dual-arm repository:
 
 ```bash
-cd Le-nero/dual_arm_data_collection/lerobot_dual_arm_teleop/teleoperators/oculus_teleoperator/oculus
+cd dual_arm_teleop/teleoperators/oculus_teleoperator/oculus
 git clone https://github.com/rail-berkeley/oculus_reader.git
 cd oculus_reader
 pip install -e .
@@ -71,7 +46,7 @@ pip install -e .
 If the directory already exists, update it and reinstall:
 
 ```bash
-cd Le-nero/dual_arm_data_collection/lerobot_dual_arm_teleop/teleoperators/oculus_teleoperator/oculus/oculus_reader
+cd dual_arm_teleop/teleoperators/oculus_teleoperator/oculus/oculus_reader
 git pull --ff-only
 pip install -e .
 ```
@@ -96,14 +71,14 @@ On the first USB connection, allow USB debugging in the headset. For wireless co
 The runtime flow can be understood as:
 
 ```text
-scripts/config/*.yaml
+dual_arm_teleop/scripts/config/*.yaml
         |
         v
-scripts/core/*.py command entry points
+dual_arm_teleop/scripts/core/*.py command entry points
         |
-        +--> robots create the real robot interface
-        +--> teleoperators create Oculus teleoperation input
-        +--> src/lerobot/policies create policy models
+        +--> dual_arm_teleop/robots create the real robot interface
+        +--> dual_arm_teleop/teleoperators create Oculus teleoperation input
+        +--> Le-nero/src/lerobot/policies create policy models
         |
         v
 LeRobot dataset / train / replay / visualize
@@ -133,7 +108,7 @@ The most commonly used policy config files in the dual-arm workflow are:
 Robot interfaces are located in:
 
 ```text
-dual_arm_data_collection/lerobot_dual_arm_teleop/robots
+dual_arm_teleop/robots
 ```
 
 `robots/__init__.py` is the robot registry. The currently registered robot types include:
@@ -155,7 +130,7 @@ Each concrete robot class implements the robot interface expected by LeRobot, su
 Hardware-specific parameters should usually live in config files instead of runtime scripts:
 
 ```text
-dual_arm_data_collection/lerobot_dual_arm_teleop/scripts/config/DAQ_config
+dual_arm_teleop/scripts/config/robots
 ```
 
 For example, `nero_teleop.yaml` defines the Nero data acquisition settings, including robot IP, port, gripper parameters, Oculus mapping, and camera serial numbers. `run_record.py`, `run_replay.py`, and `reset_robot.py` automatically load the corresponding DAQ (Data Acquisition) config based on `record.robot_type`. You can also explicitly set `daq_config_path` in `record_cfg.yaml`.
@@ -165,7 +140,7 @@ For example, `nero_teleop.yaml` defines the Nero data acquisition settings, incl
 Main scripts are located in:
 
 ```text
-dual_arm_data_collection/lerobot_dual_arm_teleop/scripts
+dual_arm_teleop/scripts
 ```
 
 Common directories:
@@ -192,10 +167,10 @@ The three `robot-record` modes are controlled by `record.run_mode`:
 
 ## Core Module Usage
 
-After installing `dual_arm_data_collection/lerobot_dual_arm_teleop/setup.py`, the following console commands are registered. Install with:
+After installing `dual_arm_teleop/setup.py`, the following console commands are registered. Install with:
 
 ```bash
-cd Le-nero/dual_arm_data_collection/lerobot_dual_arm_teleop
+cd dual_arm_teleop
 pip install -e .
 ```
 
@@ -314,7 +289,7 @@ If `mirror_teleop` is enabled, the left/right controller assignment is swapped a
 Common workflow example:
 
 ```bash
-cd Le-nero/dual_arm_data_collection/lerobot_dual_arm_teleop
+cd dual_arm_teleop
 
 # 1. Show camera serial numbers and fill them into scripts/config/DAQ_config/*.yaml
 tools-check-rs
@@ -372,11 +347,11 @@ Common key controls during collection:
 
 ```bash
 conda run -n dual_arm_data python -m pytest \
-  dual_arm_data_collection/lerobot_dual_arm_teleop/tests/test_gripper_transition_hysteresis.py \
-  dual_arm_data_collection/lerobot_dual_arm_teleop/tests/test_annotation_batch_propagation.py \
-  dual_arm_data_collection/lerobot_dual_arm_teleop/tests/test_act_weighted_loss.py \
-  dual_arm_data_collection/lerobot_dual_arm_teleop/tests/test_diffusion_weighted_loss.py \
-  dual_arm_data_collection/lerobot_dual_arm_teleop/tests/test_keyframe_sampler.py \
-  dual_arm_data_collection/lerobot_dual_arm_teleop/tests/test_keyframe_metrics_logging.py \
-  dual_arm_data_collection/lerobot_dual_arm_teleop/tests/test_keyframe_regression_safety.py
+  dual_arm_teleop/tests/test_gripper_transition_hysteresis.py \
+  dual_arm_teleop/tests/test_annotation_batch_propagation.py \
+  dual_arm_teleop/tests/test_act_weighted_loss.py \
+  dual_arm_teleop/tests/test_diffusion_weighted_loss.py \
+  dual_arm_teleop/tests/test_keyframe_sampler.py \
+  dual_arm_teleop/tests/test_keyframe_metrics_logging.py \
+  dual_arm_teleop/tests/test_keyframe_regression_safety.py
 ```

@@ -1,51 +1,22 @@
 # Le-nero
 
-本仓库基于 LeRobot，增加了双臂机器人遥操作、数据采集、策略训练和 DAgger 轮次闭环流程。本文只介绍日常使用需要理解的仓库结构、配置入口和运行调用关系。
-
-下文假设仓库目录为：
-
-实际使用时可以替换为自己的本地路径。
+本仓库基于 LeRobot，提供数据集和策略训练能力；机器人硬件、遥操作与采集入口由独立维护的 `dual_arm_teleop` 仓库提供。两个仓库安装在同一个 Python 环境中，但保持为同级、相互独立的 Git 仓库。
 
 ## 仓库获取与环境配置
 
-首次拉取仓库时建议直接带上子模块：
+首次部署时，将 Le-nero 和双臂硬件项目拉取为同级仓库：
 
 ```bash
-git clone --recurse-submodules <Le-nero 仓库地址> Le-nero
-cd Le-nero
+git clone <Le-nero 仓库地址> Le-nero
+git clone <dual_arm_teleop 仓库地址> dual_arm_teleop
 ```
 
-如果已经 clone 过仓库，但子模块目录为空或缺文件，在仓库根目录执行：
-
-```bash
-git submodule sync --recursive
-git submodule update --init --recursive
-```
-
-日常更新主仓库和子模块：
+日常开发时分别更新两个仓库：
 
 ```bash
 cd Le-nero
 git pull --ff-only
-git submodule sync --recursive
-git submodule update --init --recursive
-git submodule update --remote --merge --recursive
-```
-
-切换主仓库分支：
-
-```bash
-git fetch origin
-git switch <branch_name>
-git submodule update --init --recursive
-```
-
-切换或更新双臂遥操作子模块：
-
-```bash
-cd Le-nero/dual_arm_data_collection/lerobot_dual_arm_teleop
-git fetch origin
-git switch main
+cd ../dual_arm_teleop
 git pull --ff-only
 ```
 
@@ -59,14 +30,14 @@ python -m pip install --upgrade pip
 cd Le-nero
 pip install -e .
 
-cd dual_arm_data_collection/lerobot_dual_arm_teleop
+cd ../dual_arm_teleop
 pip install -e .
 ```
 
-Oculus Reader 不是通过当前 `.gitmodules` 管理的子模块，需要单独 clone 到指定目录：
+Oculus Reader 需要单独 clone 到独立的双臂仓库中：
 
 ```bash
-cd Le-nero/dual_arm_data_collection/lerobot_dual_arm_teleop/teleoperators/oculus_teleoperator/oculus
+cd dual_arm_teleop/teleoperators/oculus_teleoperator/oculus
 git clone https://github.com/rail-berkeley/oculus_reader.git
 cd oculus_reader
 pip install -e .
@@ -75,7 +46,7 @@ pip install -e .
 如果该目录已经存在，只需要更新并重新安装：
 
 ```bash
-cd Le-nero/dual_arm_data_collection/lerobot_dual_arm_teleop/teleoperators/oculus_teleoperator/oculus/oculus_reader
+cd dual_arm_teleop/teleoperators/oculus_teleoperator/oculus/oculus_reader
 git pull --ff-only
 pip install -e .
 ```
@@ -100,14 +71,14 @@ adb devices
 仓库的运行链路可以简化理解为：
 
 ```text
-scripts/config/*.yaml
+dual_arm_teleop/scripts/config/*.yaml
         |
         v
-scripts/core/*.py 命令入口
+dual_arm_teleop/scripts/core/*.py 命令入口
         |
-        +--> robots 创建真实机器人接口
-        +--> teleoperators 创建 Oculus 遥操作输入
-        +--> src/lerobot/policies 创建策略模型
+        +--> dual_arm_teleop/robots 创建真实机器人接口
+        +--> dual_arm_teleop/teleoperators 创建 Oculus 遥操作输入
+        +--> Le-nero/src/lerobot/policies 创建策略模型
         |
         v
 LeRobot dataset / train / replay / visualize
@@ -137,7 +108,7 @@ src/lerobot/policies
 机器人接口位于：
 
 ```text
-dual_arm_data_collection/lerobot_dual_arm_teleop/robots
+dual_arm_teleop/robots
 ```
 
 `robots/__init__.py` 是机器人注册表，当前注册的类型包括：
@@ -159,7 +130,7 @@ create_robot(robot_type, robot_config)
 硬件相关参数不建议直接写在运行脚本里，而是放在：
 
 ```text
-dual_arm_data_collection/lerobot_dual_arm_teleop/scripts/config/DAQ_config
+dual_arm_teleop/scripts/config/robots
 ```
 
 例如 `nero_teleop.yaml` 定义 Nero 的数据采集配置，包括机器人 IP、端口、夹爪参数、Oculus 映射和相机序列号。`run_record.py`、`run_replay.py`、`reset_robot.py` 会根据 `record.robot_type` 自动加载对应 DAQ（Data Acquisition）配置；也可以在 `record_cfg.yaml` 中通过 `daq_config_path` 显式指定。
@@ -169,7 +140,7 @@ dual_arm_data_collection/lerobot_dual_arm_teleop/scripts/config/DAQ_config
 主要脚本位于：
 
 ```text
-dual_arm_data_collection/lerobot_dual_arm_teleop/scripts
+dual_arm_teleop/scripts
 ```
 
 常用目录含义：
@@ -196,10 +167,10 @@ dual_arm_data_collection/lerobot_dual_arm_teleop/scripts
 
 ## 核心模块使用
 
-`dual_arm_data_collection/lerobot_dual_arm_teleop/setup.py` 安装后会注册以下命令。安装命令为：
+`dual_arm_teleop/setup.py` 安装后会注册以下命令。安装命令为：
 
 ```bash
-cd Le-nero/dual_arm_data_collection/lerobot_dual_arm_teleop
+cd dual_arm_teleop
 pip install -e .
 ```
 
@@ -318,7 +289,7 @@ DAgger 前通常需要修改 `scripts/config/dagger_rounds_cfg.yaml`：
 常用流程示例：
 
 ```bash
-cd Le-nero/dual_arm_data_collection/lerobot_dual_arm_teleop
+cd dual_arm_teleop
 
 # 1. 查看相机序列号，填入 scripts/config/DAQ_config/*.yaml
 tools-check-rs
@@ -376,11 +347,11 @@ robot-dagger --config scripts/config/dagger_rounds_cfg.yaml
 
 ```bash
 conda run -n dual_arm_data python -m pytest \
-  dual_arm_data_collection/lerobot_dual_arm_teleop/tests/test_gripper_transition_hysteresis.py \
-  dual_arm_data_collection/lerobot_dual_arm_teleop/tests/test_annotation_batch_propagation.py \
-  dual_arm_data_collection/lerobot_dual_arm_teleop/tests/test_act_weighted_loss.py \
-  dual_arm_data_collection/lerobot_dual_arm_teleop/tests/test_diffusion_weighted_loss.py \
-  dual_arm_data_collection/lerobot_dual_arm_teleop/tests/test_keyframe_sampler.py \
-  dual_arm_data_collection/lerobot_dual_arm_teleop/tests/test_keyframe_metrics_logging.py \
-  dual_arm_data_collection/lerobot_dual_arm_teleop/tests/test_keyframe_regression_safety.py
+  dual_arm_teleop/tests/test_gripper_transition_hysteresis.py \
+  dual_arm_teleop/tests/test_annotation_batch_propagation.py \
+  dual_arm_teleop/tests/test_act_weighted_loss.py \
+  dual_arm_teleop/tests/test_diffusion_weighted_loss.py \
+  dual_arm_teleop/tests/test_keyframe_sampler.py \
+  dual_arm_teleop/tests/test_keyframe_metrics_logging.py \
+  dual_arm_teleop/tests/test_keyframe_regression_safety.py
 ```
